@@ -1,0 +1,869 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f6f4a">
+<meta name="description" content="Zimmerpflanzen tracken und pflegen">
+<title>Pflanzenpflege</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+  :root {
+    --bg: #f4f7f2;
+    --surface: #ffffff;
+    --surface-2: #eaf1e6;
+    --text: #1d2a22;
+    --muted: #5f6f64;
+    --line: #dbe5d7;
+    --primary: #1f6f4a;
+    --primary-ink: #ffffff;
+    --water: #2a7bd1;
+    --water-bg: #e3effb;
+    --fert: #a0700f;
+    --fert-bg: #fbf1dc;
+    --danger: #c0392b;
+    --danger-bg: #fbe5e2;
+    --ok: #2e8b57;
+    --shadow: 0 1px 2px rgba(0,0,0,.06), 0 4px 14px rgba(0,0,0,.05);
+    --radius: 16px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101613;
+      --surface: #18211c;
+      --surface-2: #213028;
+      --text: #e6efe8;
+      --muted: #9aaba0;
+      --line: #2b3a31;
+      --primary: #4fbf86;
+      --primary-ink: #0d1a13;
+      --water: #6db0f2;
+      --water-bg: #1b2c3d;
+      --fert: #e0b25a;
+      --fert-bg: #352b17;
+      --danger: #f08070;
+      --danger-bg: #3a1f1b;
+      --ok: #5fcf8f;
+      --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 16px; line-height: 1.45;
+    padding-bottom: calc(76px + env(safe-area-inset-bottom));
+  }
+  header {
+    position: sticky; top: 0; z-index: 5;
+    background: var(--bg);
+    padding: calc(14px + env(safe-area-inset-top)) 16px 10px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  header h1 { font-size: 24px; margin: 0; letter-spacing: -.01em; }
+  header .sub { color: var(--muted); font-size: 14px; }
+  main { padding: 0 16px 24px; max-width: 640px; margin: 0 auto; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  .icon-btn {
+    border: 0; background: var(--surface-2); border-radius: 999px;
+    width: 42px; height: 42px; display: grid; place-items: center; font-size: 20px;
+  }
+
+  /* Bottom nav */
+  nav.tabs {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+    background: var(--surface); border-top: 1px solid var(--line);
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  nav.tabs button {
+    border: 0; background: none; padding: 10px 4px 12px;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    color: var(--muted); font-size: 12px; font-weight: 500;
+  }
+  nav.tabs button .ic { font-size: 22px; line-height: 1; }
+  nav.tabs button[aria-current="page"] { color: var(--primary); }
+  nav.tabs button[aria-current="page"] .ic {
+    background: var(--surface-2); border-radius: 999px; padding: 4px 18px;
+  }
+
+  .fab {
+    position: fixed; right: 18px; bottom: calc(88px + env(safe-area-inset-bottom)); z-index: 9;
+    border: 0; border-radius: 18px; background: var(--primary); color: var(--primary-ink);
+    padding: 16px 20px; font-weight: 600; font-size: 16px;
+    box-shadow: 0 6px 20px rgba(0,0,0,.2);
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  /* Cards */
+  .section-title { font-size: 14px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 18px 4px 8px; }
+  .card {
+    background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow);
+    border: 1px solid var(--line);
+  }
+  .task {
+    display: flex; align-items: center; gap: 12px; padding: 12px; margin-bottom: 10px;
+  }
+  .thumb {
+    width: 56px; height: 56px; border-radius: 14px; flex: none;
+    background: var(--surface-2) center/cover no-repeat;
+    display: grid; place-items: center; font-size: 28px; overflow: hidden;
+  }
+  .task .info { flex: 1; min-width: 0; }
+  .task .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .task .meta { font-size: 14px; color: var(--muted); }
+  .task .meta.late { color: var(--danger); font-weight: 500; }
+  .action {
+    border: 0; border-radius: 12px; padding: 10px 12px; font-weight: 600; font-size: 14px;
+    display: flex; align-items: center; gap: 6px; white-space: nowrap; min-height: 44px;
+  }
+  .action.water { background: var(--water-bg); color: var(--water); }
+  .action.fert { background: var(--fert-bg); color: var(--fert); }
+  .action.done { background: var(--surface-2); color: var(--ok); }
+
+  .empty { text-align: center; color: var(--muted); padding: 40px 20px; }
+  .empty .big { font-size: 56px; }
+
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .plant-card { overflow: hidden; text-align: left; padding: 0; border: 1px solid var(--line); }
+  .plant-card .img {
+    aspect-ratio: 1 / 1; background: var(--surface-2) center/cover no-repeat;
+    display: grid; place-items: center; font-size: 56px; position: relative;
+  }
+  .plant-card .body { padding: 10px 12px 12px; }
+  .plant-card .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .plant-card .loc { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .badge { font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 999px; }
+  .badge.water { background: var(--water-bg); color: var(--water); }
+  .badge.fert { background: var(--fert-bg); color: var(--fert); }
+  .badge.late { background: var(--danger-bg); color: var(--danger); }
+
+  .filter { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 12px; scrollbar-width: none; }
+  .chip {
+    border: 1px solid var(--line); background: var(--surface); border-radius: 999px;
+    padding: 7px 14px; font-size: 14px; white-space: nowrap;
+  }
+  .chip[aria-pressed="true"] { background: var(--primary); color: var(--primary-ink); border-color: var(--primary); }
+  .search {
+    width: 100%; border: 1px solid var(--line); background: var(--surface); color: var(--text);
+    border-radius: 12px; padding: 12px 14px; font: inherit; margin-bottom: 8px;
+  }
+
+  /* Sheets / modal */
+  .sheet-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 20;
+    display: none; align-items: flex-end; justify-content: center;
+  }
+  .sheet-backdrop.open { display: flex; }
+  .sheet {
+    background: var(--bg); width: 100%; max-width: 640px; max-height: 94vh; overflow-y: auto;
+    border-radius: 22px 22px 0 0; padding: 0 16px calc(20px + env(safe-area-inset-bottom));
+    animation: up .22s ease-out;
+  }
+  @keyframes up { from { transform: translateY(40px); opacity: .6; } to { transform: none; opacity: 1; } }
+  .sheet-head {
+    position: sticky; top: 0; background: var(--bg); z-index: 2;
+    display: flex; align-items: center; justify-content: space-between; padding: 14px 0 10px;
+  }
+  .sheet-head h2 { margin: 0; font-size: 20px; }
+  .grabber { width: 40px; height: 4px; background: var(--line); border-radius: 4px; margin: 8px auto 0; }
+
+  label.field { display: block; margin-bottom: 14px; }
+  label.field > span { display: block; font-size: 14px; color: var(--muted); margin-bottom: 6px; font-weight: 500; }
+  input[type=text], input[type=number], input[type=date], select, textarea {
+    width: 100%; border: 1px solid var(--line); background: var(--surface); color: var(--text);
+    border-radius: 12px; padding: 12px 14px; font: inherit;
+  }
+  textarea { min-height: 80px; resize: vertical; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .hint { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .photo-pick {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 14px;
+  }
+  .photo-pick .thumb { width: 84px; height: 84px; font-size: 36px; }
+  .btn {
+    border: 0; border-radius: 14px; padding: 14px 18px; font-weight: 600;
+    background: var(--surface-2); color: var(--text); min-height: 48px;
+  }
+  .btn.primary { background: var(--primary); color: var(--primary-ink); }
+  .btn.danger { background: var(--danger-bg); color: var(--danger); }
+  .btn.block { width: 100%; }
+  .btn-row { display: flex; gap: 10px; margin-top: 6px; }
+  .btn-row .btn { flex: 1; }
+
+  /* Detail */
+  .hero {
+    aspect-ratio: 4 / 3; border-radius: var(--radius); background: var(--surface-2) center/cover no-repeat;
+    display: grid; place-items: center; font-size: 90px; margin-bottom: 14px;
+  }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .stat { padding: 12px; }
+  .stat .lbl { font-size: 13px; color: var(--muted); }
+  .stat .val { font-weight: 700; font-size: 17px; }
+  .stat .val.late { color: var(--danger); }
+  .stat .act { margin-top: 10px; width: 100%; justify-content: center; }
+  .tip { padding: 12px 14px; margin-bottom: 14px; background: var(--surface-2); border: 0; font-size: 15px; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; padding: 12px 14px; margin-bottom: 14px; font-size: 15px; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; }
+  .log { list-style: none; margin: 0 0 14px; padding: 0; }
+  .log li { display: flex; gap: 10px; padding: 10px 4px; border-bottom: 1px solid var(--line); font-size: 15px; align-items: flex-start; }
+  .log li .d { color: var(--muted); font-size: 13px; margin-left: auto; white-space: nowrap; }
+  .log li .del { border: 0; background: none; color: var(--muted); padding: 0 4px; font-size: 16px; }
+  .quick { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+
+  .settings .item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px; border-bottom: 1px solid var(--line); }
+  .settings .item:last-child { border-bottom: 0; }
+  .settings .item small { display: block; color: var(--muted); font-size: 13px; }
+  .switch { position: relative; width: 52px; height: 32px; flex: none; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch span { position: absolute; inset: 0; background: var(--line); border-radius: 999px; transition: .2s; }
+  .switch span::after { content: ""; position: absolute; width: 24px; height: 24px; left: 4px; top: 4px; background: #fff; border-radius: 50%; transition: .2s; }
+  .switch input:checked + span { background: var(--primary); }
+  .switch input:checked + span::after { transform: translateX(20px); }
+
+  .toast {
+    position: fixed; left: 50%; bottom: calc(160px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+    background: var(--text); color: var(--bg); padding: 12px 16px; border-radius: 12px; z-index: 30;
+    font-size: 15px; display: none; align-items: center; gap: 14px; width: max-content; max-width: calc(100% - 32px);
+  }
+  .toast.show { display: flex; }
+  .toast button { border: 0; background: none; color: var(--primary); font-weight: 700; padding: 4px; }
+  @media (prefers-color-scheme: dark) { .toast button { color: #1f6f4a; } }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1 id="title">Heute</h1>
+    <div class="sub" id="subtitle"></div>
+  </div>
+</header>
+
+<main>
+  <section id="view-today"></section>
+  <section id="view-plants" hidden></section>
+  <section id="view-settings" hidden></section>
+</main>
+
+<button class="fab" id="fab" aria-label="Pflanze hinzufügen"><span>＋</span> Pflanze</button>
+
+<nav class="tabs" aria-label="Navigation">
+  <button data-view="today" aria-current="page"><span class="ic">💧</span>Heute</button>
+  <button data-view="plants"><span class="ic">🪴</span>Pflanzen</button>
+  <button data-view="settings"><span class="ic">⚙️</span>Mehr</button>
+</nav>
+
+<!-- Edit sheet -->
+<div class="sheet-backdrop" id="edit-sheet">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="edit-title">
+    <div class="grabber"></div>
+    <div class="sheet-head">
+      <h2 id="edit-title">Neue Pflanze</h2>
+      <button class="icon-btn" data-close aria-label="Schließen">✕</button>
+    </div>
+    <form id="edit-form" autocomplete="off">
+      <div class="photo-pick">
+        <div class="thumb" id="photo-preview">🪴</div>
+        <div>
+          <label class="btn" style="display:inline-block">📷 Foto wählen
+            <input type="file" accept="image/*" id="photo-input" hidden>
+          </label>
+          <button type="button" class="btn" id="photo-remove" hidden style="margin-left:6px">Entfernen</button>
+        </div>
+      </div>
+      <label class="field"><span>Art (Vorlage)</span>
+        <select name="species" id="species-select"></select>
+        <div class="hint" id="species-hint">Wähle eine Art, um Gieß- und Düngeintervalle vorzuschlagen.</div>
+      </label>
+      <label class="field"><span>Name / Spitzname *</span>
+        <input type="text" name="name" required placeholder="z. B. Monstera im Wohnzimmer">
+      </label>
+      <label class="field"><span>Standort</span>
+        <input type="text" name="location" list="locations" placeholder="z. B. Wohnzimmer, Südfenster">
+        <datalist id="locations"></datalist>
+      </label>
+      <div class="row">
+        <label class="field"><span>Gießen alle (Tage)</span>
+          <input type="number" name="waterEvery" min="1" max="120" required value="7" inputmode="numeric">
+        </label>
+        <label class="field"><span>Düngen alle (Tage)</span>
+          <input type="number" name="fertEvery" min="0" max="365" value="14" inputmode="numeric">
+          <div class="hint">0 = nie</div>
+        </label>
+      </div>
+      <div class="row">
+        <label class="field"><span>Licht</span>
+          <select name="light">
+            <option value="">–</option>
+            <option>Schatten</option>
+            <option>Halbschatten</option>
+            <option>Hell, indirekt</option>
+            <option>Sonnig</option>
+          </select>
+        </label>
+        <label class="field"><span>Zuletzt gegossen</span>
+          <input type="date" name="lastWater">
+        </label>
+      </div>
+      <label class="field"><span>Notizen</span>
+        <textarea name="notes" placeholder="Topfgröße, Erde, Besonderheiten …"></textarea>
+      </label>
+      <div class="btn-row">
+        <button type="button" class="btn" data-close>Abbrechen</button>
+        <button type="submit" class="btn primary">Speichern</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Detail sheet -->
+<div class="sheet-backdrop" id="detail-sheet">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="detail-title">
+    <div class="grabber"></div>
+    <div class="sheet-head">
+      <h2 id="detail-title"></h2>
+      <div style="display:flex; gap:8px">
+        <button class="icon-btn" id="detail-edit" aria-label="Bearbeiten">✏️</button>
+        <button class="icon-btn" data-close aria-label="Schließen">✕</button>
+      </div>
+    </div>
+    <div id="detail-body"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><span id="toast-msg"></span><button id="toast-undo" hidden>Rückgängig</button></div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ---------- Species presets ----------
+  const SPECIES = [
+    { id: '', name: 'Eigene / unbekannt', emoji: '🪴', water: 7, fert: 14, light: '', tip: '' },
+    { id: 'monstera', name: 'Monstera (Fensterblatt)', emoji: '🌿', water: 7, fert: 14, light: 'Hell, indirekt', tip: 'Gießen, wenn die oberen 3–5 cm Erde trocken sind. Blätter gelegentlich abwischen. Mag Rankhilfe (Moosstab).' },
+    { id: 'pothos', name: 'Efeutute (Pothos)', emoji: '🍃', water: 7, fert: 14, light: 'Halbschatten', tip: 'Sehr robust. Hängende, schlappe Blätter zeigen Durst an. Triebe lassen sich leicht in Wasser bewurzeln.' },
+    { id: 'sansevieria', name: 'Bogenhanf (Sansevieria)', emoji: '🌵', water: 21, fert: 30, light: 'Halbschatten', tip: 'Erde komplett austrocknen lassen – Staunässe ist der häufigste Killer. Im Winter fast gar nicht gießen.' },
+    { id: 'zamioculcas', name: 'Glücksfeder (Zamioculcas)', emoji: '🌱', water: 21, fert: 30, light: 'Halbschatten', tip: 'Speichert Wasser in den Rhizomen. Lieber zu trocken als zu nass. Gelbe Blätter = meist zu viel Wasser.' },
+    { id: 'calathea', name: 'Korbmarante (Calathea)', emoji: '🌿', water: 5, fert: 21, light: 'Halbschatten', tip: 'Erde gleichmäßig feucht halten, kalkarmes Wasser verwenden. Braucht hohe Luftfeuchte – regelmäßig besprühen.' },
+    { id: 'orchid', name: 'Orchidee (Phalaenopsis)', emoji: '🌸', water: 7, fert: 21, light: 'Hell, indirekt', tip: 'Tauchen statt gießen: 10 Min. in Wasser tauchen, gut abtropfen lassen. Silbrige Wurzeln = Durst.' },
+    { id: 'spathiphyllum', name: 'Einblatt (Spathiphyllum)', emoji: '🤍', water: 5, fert: 14, light: 'Halbschatten', tip: 'Lässt die Blätter hängen, wenn es Durst hat – erholt sich nach dem Gießen schnell.' },
+    { id: 'ficus-lyrata', name: 'Geigenfeige (Ficus lyrata)', emoji: '🌳', water: 7, fert: 14, light: 'Hell, indirekt', tip: 'Mag keinen Standortwechsel und keine Zugluft. Gießen, wenn die obere Erdschicht trocken ist.' },
+    { id: 'ficus-elastica', name: 'Gummibaum (Ficus elastica)', emoji: '🌳', water: 10, fert: 14, light: 'Hell, indirekt', tip: 'Blätter regelmäßig abstauben. Verträgt Trockenheit besser als Nässe.' },
+    { id: 'philodendron', name: 'Philodendron', emoji: '🌿', water: 7, fert: 14, light: 'Halbschatten', tip: 'Gießen, wenn die oberen 2–3 cm trocken sind. Mag Wärme und etwas Luftfeuchte.' },
+    { id: 'chlorophytum', name: 'Grünlilie', emoji: '🌱', water: 7, fert: 14, light: 'Halbschatten', tip: 'Sehr pflegeleicht. Braune Spitzen deuten auf Kalk oder trockene Luft hin.' },
+    { id: 'aloe', name: 'Aloe vera', emoji: '🌵', water: 21, fert: 60, light: 'Sonnig', tip: 'Sukkulente: durchdringend gießen, dann komplett austrocknen lassen. Sonniger Platz.' },
+    { id: 'cactus', name: 'Kaktus', emoji: '🌵', water: 28, fert: 60, light: 'Sonnig', tip: 'Im Winter kühl und trocken halten – das fördert die Blüte. Kakteenerde verwenden.' },
+    { id: 'dracaena', name: 'Drachenbaum (Dracaena)', emoji: '🌴', water: 10, fert: 21, light: 'Halbschatten', tip: 'Empfindlich gegenüber Fluorid/Kalk – braune Spitzen. Gießen, wenn die Hälfte der Erde trocken ist.' },
+    { id: 'fern', name: 'Farn (Nephrolepis)', emoji: '🌿', water: 4, fert: 21, light: 'Halbschatten', tip: 'Darf nie austrocknen. Hohe Luftfeuchte, gerne im Bad.' },
+    { id: 'peperomia', name: 'Peperomia', emoji: '🍀', water: 10, fert: 30, light: 'Halbschatten', tip: 'Fleischige Blätter speichern Wasser – zwischen den Gießgängen antrocknen lassen.' },
+    { id: 'alocasia', name: 'Alocasia', emoji: '🌿', water: 5, fert: 14, light: 'Hell, indirekt', tip: 'Mag es warm und feucht. Im Winter kann sie Blätter abwerfen – weniger gießen.' },
+    { id: 'herbs', name: 'Küchenkräuter (Basilikum o. ä.)', emoji: '🌿', water: 2, fert: 14, light: 'Sonnig', tip: 'Von unten gießen, Erde feucht halten. Triebspitzen regelmäßig ernten, damit die Pflanze buschig wird.' },
+  ];
+  const speciesById = id => SPECIES.find(s => s.id === id) || SPECIES[0];
+
+  // ---------- Storage ----------
+  const KEY = 'pflanzenpflege.v1';
+  const store = {
+    load() {
+      try {
+        const raw = localStorage.getItem(KEY);
+        if (raw) return JSON.parse(raw);
+      } catch (e) { console.warn('load failed', e); }
+      return { plants: [], settings: { winterMode: true, winterAuto: true } };
+    },
+    save() {
+      try { localStorage.setItem(KEY, JSON.stringify(state)); }
+      catch (e) { toast('Speichern fehlgeschlagen – evtl. Speicher voll (Fotos?).'); console.error(e); }
+    }
+  };
+  let state = store.load();
+  state.settings = Object.assign({ winterMode: true, winterAuto: true }, state.settings || {});
+
+  // Ask the browser to keep our data (avoid eviction)
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+  // ---------- Date helpers ----------
+  const DAY = 86400000;
+  const startOfDay = d => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
+  const today = () => startOfDay(new Date());
+  const toISODate = d => { const x = new Date(d); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; };
+  const daysBetween = (a, b) => Math.round((startOfDay(b) - startOfDay(a)) / DAY);
+  const fmtDate = d => new Date(d).toLocaleDateString('de-DE', { day: 'numeric', month: 'short', year: new Date(d).getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined });
+  const relDays = n => n === 0 ? 'heute' : n === 1 ? 'morgen' : n === -1 ? 'gestern' : n > 0 ? `in ${n} Tagen` : `vor ${-n} Tagen`;
+
+  const isWinterNow = () => {
+    if (!state.settings.winterMode) return false;
+    if (!state.settings.winterAuto) return true;
+    const m = new Date().getMonth(); // Nov–Feb
+    return m >= 10 || m <= 1;
+  };
+
+  // ---------- Plant logic ----------
+  const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+  const lastOf = (p, type) => {
+    const ev = p.log.filter(e => e.type === type).sort((a, b) => b.date.localeCompare(a.date))[0];
+    return ev ? ev.date : null;
+  };
+  function waterInterval(p) {
+    return isWinterNow() ? Math.round(p.waterEvery * 1.5) : p.waterEvery;
+  }
+  function fertActive(p) { return p.fertEvery > 0 && !isWinterNow(); }
+  function nextDue(p, type) {
+    if (type === 'fert' && !fertActive(p)) return null;
+    const last = lastOf(p, type) || p.created;
+    const every = type === 'water' ? waterInterval(p) : p.fertEvery;
+    const lastDate = new Date(last + 'T00:00:00');
+    const due = new Date(lastDate.getTime() + every * DAY);
+    return { date: due, days: daysBetween(today(), due), last };
+  }
+
+  // ---------- UI helpers ----------
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  const thumbStyle = p => p.photo ? `style="background-image:url('${p.photo}')"` : '';
+  const thumbInner = p => p.photo ? '' : esc(speciesById(p.species).emoji);
+
+  let toastTimer, undoFn;
+  function toast(msg, undo) {
+    $('#toast-msg').textContent = msg;
+    undoFn = undo || null;
+    $('#toast-undo').hidden = !undo;
+    $('#toast').classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => $('#toast').classList.remove('show'), 4000);
+  }
+  $('#toast-undo').addEventListener('click', () => {
+    if (undoFn) undoFn();
+    $('#toast').classList.remove('show');
+  });
+
+  function addEvent(plantId, type, text) {
+    const p = state.plants.find(x => x.id === plantId);
+    if (!p) return;
+    const ev = { id: uid(), type, date: toISODate(new Date()), text: text || '' };
+    p.log.push(ev);
+    store.save(); render();
+    const label = { water: 'gegossen 💧', fert: 'gedüngt 🌾', repot: 'umgetopft 🪴', mist: 'besprüht 💨', note: 'Notiz gespeichert' }[type];
+    toast(`${p.name} ${label}`, () => {
+      p.log = p.log.filter(e => e.id !== ev.id);
+      store.save(); render();
+    });
+  }
+
+  // ---------- Views ----------
+  let currentView = 'today';
+  let plantFilter = 'Alle';
+  let searchTerm = '';
+
+  function render() {
+    renderToday(); renderPlants(); renderSettings();
+    if (openDetailId) renderDetail(openDetailId);
+    const titles = { today: 'Heute', plants: 'Meine Pflanzen', settings: 'Mehr' };
+    $('#title').textContent = titles[currentView];
+    const n = state.plants.length;
+    $('#subtitle').textContent = currentView === 'today'
+      ? new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' }) + (isWinterNow() ? ' · ❄️ Winterpflege' : '')
+      : currentView === 'plants' ? `${n} ${n === 1 ? 'Pflanze' : 'Pflanzen'}` : '';
+    $('#fab').hidden = currentView === 'settings';
+  }
+
+  function taskRow(p, type, due) {
+    const late = due.days < 0;
+    const metaTxt = type === 'water'
+      ? (late ? `Gießen – ${-due.days} ${-due.days === 1 ? 'Tag' : 'Tage'} überfällig` : due.days === 0 ? 'Heute gießen' : `Gießen ${relDays(due.days)}`)
+      : (late ? `Düngen – ${-due.days} ${-due.days === 1 ? 'Tag' : 'Tage'} überfällig` : due.days === 0 ? 'Heute düngen' : `Düngen ${relDays(due.days)}`);
+    return `<div class="card task">
+      <button class="thumb" data-open="${p.id}" ${thumbStyle(p)} style="border:0" aria-label="${esc(p.name)} öffnen">${thumbInner(p)}</button>
+      <div class="info" data-open="${p.id}">
+        <div class="name">${esc(p.name)}</div>
+        <div class="meta ${late ? 'late' : ''}">${metaTxt}${p.location ? ' · ' + esc(p.location) : ''}</div>
+      </div>
+      <button class="action ${type}" data-do="${type}" data-id="${p.id}">${type === 'water' ? '💧 Gießen' : '🌾 Düngen'}</button>
+    </div>`;
+  }
+
+  function renderToday() {
+    const el = $('#view-today');
+    if (!state.plants.length) {
+      el.innerHTML = `<div class="empty"><div class="big">🪴</div>
+        <h2>Noch keine Pflanzen</h2>
+        <p>Füge deine erste Zimmerpflanze hinzu – die App erinnert dich dann ans Gießen und Düngen.</p>
+        <button class="btn primary" id="empty-add">Erste Pflanze anlegen</button></div>`;
+      $('#empty-add').onclick = () => openEdit();
+      return;
+    }
+    const due = [], soon = [];
+    const todayStr = toISODate(new Date());
+    const doneToday = [];
+    for (const p of state.plants) {
+      for (const type of ['water', 'fert']) {
+        const d = nextDue(p, type);
+        if (!d) continue;
+        if (d.days <= 0) due.push({ p, type, d });
+        else if (d.days <= 3) soon.push({ p, type, d });
+      }
+      for (const e of p.log) if (e.date === todayStr && (e.type === 'water' || e.type === 'fert')) doneToday.push({ p, e });
+    }
+    due.sort((a, b) => a.d.days - b.d.days);
+    soon.sort((a, b) => a.d.days - b.d.days);
+
+    let html = '';
+    if (due.length) {
+      html += `<div class="section-title">Fällig (${due.length})</div>`;
+      html += due.map(x => taskRow(x.p, x.type, x.d)).join('');
+    } else {
+      html += `<div class="card" style="padding:18px; text-align:center; margin-top:8px">
+        <div style="font-size:40px">✨</div><strong>Alles erledigt!</strong>
+        <div class="hint">Heute braucht keine Pflanze Wasser oder Dünger.</div></div>`;
+    }
+    if (soon.length) {
+      html += `<div class="section-title">Demnächst</div>`;
+      html += soon.map(x => taskRow(x.p, x.type, x.d)).join('');
+    }
+    if (doneToday.length) {
+      html += `<div class="section-title">Heute erledigt</div>`;
+      html += doneToday.map(({ p, e }) => `<div class="card task" data-open="${p.id}">
+        <div class="thumb" ${thumbStyle(p)}>${thumbInner(p)}</div>
+        <div class="info"><div class="name">${esc(p.name)}</div>
+        <div class="meta">${e.type === 'water' ? '💧 Gegossen' : '🌾 Gedüngt'}</div></div>
+        <span class="action done">✓</span></div>`).join('');
+    }
+    if (isWinterNow()) {
+      html += `<div class="card tip" style="margin-top:16px">❄️ <strong>Winterpflege aktiv:</strong> Gießintervalle sind um 50 % verlängert, Düngen pausiert. Ändern unter „Mehr“.</div>`;
+    }
+    el.innerHTML = html;
+  }
+
+  function renderPlants() {
+    const el = $('#view-plants');
+    if (!state.plants.length) { el.innerHTML = `<div class="empty"><div class="big">🌱</div><p>Noch keine Pflanzen angelegt.</p></div>`; return; }
+    const locs = ['Alle', ...new Set(state.plants.map(p => p.location).filter(Boolean))];
+    if (!locs.includes(plantFilter)) plantFilter = 'Alle';
+    const term = searchTerm.trim().toLowerCase();
+    const list = state.plants
+      .filter(p => plantFilter === 'Alle' || p.location === plantFilter)
+      .filter(p => !term || (p.name + ' ' + speciesById(p.species).name + ' ' + (p.location||'')).toLowerCase().includes(term))
+      .sort((a, b) => a.name.localeCompare(b.name, 'de'));
+
+    let html = '';
+    if (state.plants.length > 5) html += `<input class="search" type="search" id="search" placeholder="🔍 Suchen …" value="${esc(searchTerm)}">`;
+    if (locs.length > 2) html += `<div class="filter">${locs.map(l => `<button class="chip" data-filter="${esc(l)}" aria-pressed="${l === plantFilter}">${esc(l)}</button>`).join('')}</div>`;
+    html += `<div class="grid">${list.map(p => {
+      const w = nextDue(p, 'water'), f = nextDue(p, 'fert');
+      const wb = w.days < 0 ? `<span class="badge late">💧 überfällig</span>` : `<span class="badge water">💧 ${w.days === 0 ? 'heute' : w.days + ' T'}</span>`;
+      const fb = !f ? '' : f.days < 0 ? `<span class="badge late">🌾 überfällig</span>` : `<span class="badge fert">🌾 ${f.days === 0 ? 'heute' : f.days + ' T'}</span>`;
+      return `<button class="card plant-card" data-open="${p.id}">
+        <div class="img" ${thumbStyle(p)}>${thumbInner(p)}</div>
+        <div class="body"><div class="name">${esc(p.name)}</div>
+        <div class="loc">${esc(p.location || speciesById(p.species).name)}</div>
+        <div class="badges">${wb}${fb}</div></div></button>`;
+    }).join('')}</div>`;
+    if (!list.length) html += `<div class="empty">Keine Treffer.</div>`;
+    el.innerHTML = html;
+    const s = $('#search');
+    if (s) s.addEventListener('input', e => {
+      searchTerm = e.target.value;
+      const pos = e.target.selectionStart;
+      renderPlants();
+      const s2 = $('#search'); s2.focus(); s2.setSelectionRange(pos, pos);
+    });
+  }
+
+  function renderSettings() {
+    const el = $('#view-settings');
+    const s = state.settings;
+    const total = state.plants.reduce((n, p) => n + p.log.length, 0);
+    el.innerHTML = `
+      <div class="section-title">Pflege</div>
+      <div class="card settings">
+        <div class="item"><div>Winterpflege<small>Nov–Feb: 50 % längere Gießintervalle, kein Dünger</small></div>
+          <label class="switch"><input type="checkbox" id="set-winter" ${s.winterMode ? 'checked' : ''}><span></span></label></div>
+        <div class="item" ${s.winterMode ? '' : 'hidden'}><div>Automatisch nach Jahreszeit<small>Aus = Winterpflege immer aktiv</small></div>
+          <label class="switch"><input type="checkbox" id="set-winter-auto" ${s.winterAuto ? 'checked' : ''}><span></span></label></div>
+      </div>
+      <div class="section-title">Daten</div>
+      <div class="card settings">
+        <div class="item"><div>Backup exportieren<small>${state.plants.length} Pflanzen · ${total} Einträge als JSON-Datei</small></div>
+          <button class="btn" id="export">Export</button></div>
+        <div class="item"><div>Backup importieren<small>Ersetzt alle aktuellen Daten</small></div>
+          <label class="btn">Import<input type="file" accept="application/json,.json" id="import" hidden></label></div>
+      </div>
+      <div class="section-title">Installieren</div>
+      <div class="card tip" style="background:var(--surface); border:1px solid var(--line)">
+        In Chrome auf dem Handy: Menü <strong>⋮</strong> → <strong>„Zum Startbildschirm hinzufügen“</strong> bzw. <strong>„App installieren“</strong>. Danach startet die App wie eine normale App – auch offline.
+        <div id="install-wrap" hidden style="margin-top:10px"><button class="btn primary block" id="install-btn">📲 Jetzt installieren</button></div>
+      </div>
+      <p class="hint" style="text-align:center; margin-top:20px">Alle Daten bleiben nur auf diesem Gerät gespeichert.<br>Mach ab und zu ein Backup.</p>`;
+    $('#set-winter').onchange = e => { s.winterMode = e.target.checked; store.save(); render(); };
+    const wa = $('#set-winter-auto'); if (wa) wa.onchange = e => { s.winterAuto = e.target.checked; store.save(); render(); };
+    $('#export').onclick = exportData;
+    $('#import').onchange = importData;
+    if (deferredInstall) { $('#install-wrap').hidden = false; $('#install-btn').onclick = doInstall; }
+  }
+
+  // ---------- Detail ----------
+  let openDetailId = null;
+  function openDetail(id) {
+    openDetailId = id;
+    renderDetail(id);
+    openSheet('#detail-sheet');
+  }
+  function renderDetail(id) {
+    const p = state.plants.find(x => x.id === id);
+    if (!p) { closeSheet('#detail-sheet'); return; }
+    const sp = speciesById(p.species);
+    const w = nextDue(p, 'water'), f = nextDue(p, 'fert');
+    $('#detail-title').textContent = p.name;
+    const lastW = lastOf(p, 'water'), lastF = lastOf(p, 'fert'), lastR = lastOf(p, 'repot');
+    const icon = { water: '💧', fert: '🌾', repot: '🪴', mist: '💨', note: '📝' };
+    const label = { water: 'Gegossen', fert: 'Gedüngt', repot: 'Umgetopft', mist: 'Besprüht', note: 'Notiz' };
+    const log = [...p.log].sort((a, b) => b.date.localeCompare(a.date) || 0).slice(0, 50);
+    $('#detail-body').innerHTML = `
+      <div class="hero" ${thumbStyle(p)}>${thumbInner(p)}</div>
+      <div class="stats">
+        <div class="card stat"><div class="lbl">💧 Gießen</div>
+          <div class="val ${w.days < 0 ? 'late' : ''}">${w.days < 0 ? `${-w.days} T überfällig` : relDays(w.days)}</div>
+          <div class="hint">alle ${waterInterval(p)} Tage${isWinterNow() ? ' (Winter)' : ''}<br>zuletzt: ${lastW ? fmtDate(lastW) : '–'}</div>
+          <button class="action water stat-act act" data-do="water" data-id="${p.id}">Jetzt gegossen</button></div>
+        <div class="card stat"><div class="lbl">🌾 Düngen</div>
+          <div class="val ${f && f.days < 0 ? 'late' : ''}">${!p.fertEvery ? 'nie' : !f ? 'Winterpause' : f.days < 0 ? `${-f.days} T überfällig` : relDays(f.days)}</div>
+          <div class="hint">${p.fertEvery ? `alle ${p.fertEvery} Tage` : 'kein Intervall'}<br>zuletzt: ${lastF ? fmtDate(lastF) : '–'}</div>
+          <button class="action fert act" data-do="fert" data-id="${p.id}">Jetzt gedüngt</button></div>
+      </div>
+      <div class="quick">
+        <button class="btn" data-do="mist" data-id="${p.id}">💨 Besprüht</button>
+        <button class="btn" data-do="repot" data-id="${p.id}">🪴 Umgetopft</button>
+        <button class="btn" id="add-note">📝 Notiz</button>
+      </div>
+      ${sp.tip ? `<div class="card tip">💡 ${esc(sp.tip)}</div>` : ''}
+      <dl class="card kv">
+        <dt>Art</dt><dd>${esc(sp.name)}</dd>
+        ${p.location ? `<dt>Standort</dt><dd>${esc(p.location)}</dd>` : ''}
+        ${p.light ? `<dt>Licht</dt><dd>${esc(p.light)}</dd>` : ''}
+        <dt>Seit</dt><dd>${fmtDate(p.created)}</dd>
+        ${lastR ? `<dt>Umgetopft</dt><dd>${fmtDate(lastR)}</dd>` : ''}
+        ${p.notes ? `<dt>Notizen</dt><dd style="white-space:pre-wrap">${esc(p.notes)}</dd>` : ''}
+      </dl>
+      <div class="section-title">Verlauf</div>
+      ${log.length ? `<ul class="log">${log.map(e => `<li><span>${icon[e.type] || '•'}</span>
+        <span>${label[e.type] || e.type}${e.text ? ': ' + esc(e.text) : ''}</span>
+        <span class="d">${fmtDate(e.date)}</span>
+        <button class="del" data-del-ev="${e.id}" aria-label="Eintrag löschen">✕</button></li>`).join('')}</ul>`
+        : `<p class="hint">Noch keine Einträge.</p>`}
+      <button class="btn danger block" id="delete-plant" style="margin-top:10px">Pflanze löschen</button>`;
+    $('#add-note').onclick = () => {
+      const t = prompt('Notiz (z. B. „neues Blatt“, „Schädlinge entdeckt“):');
+      if (t && t.trim()) addEvent(p.id, 'note', t.trim());
+    };
+    $('#delete-plant').onclick = () => {
+      if (!confirm(`„${p.name}“ wirklich löschen? Der Verlauf geht verloren.`)) return;
+      const idx = state.plants.indexOf(p);
+      state.plants.splice(idx, 1);
+      store.save(); closeSheet('#detail-sheet'); render();
+      toast(`${p.name} gelöscht`, () => { state.plants.splice(idx, 0, p); store.save(); render(); });
+    };
+    $('#detail-body').querySelectorAll('[data-del-ev]').forEach(b => b.onclick = () => {
+      p.log = p.log.filter(e => e.id !== b.dataset.delEv);
+      store.save(); render();
+    });
+  }
+  $('#detail-edit').onclick = () => { const id = openDetailId; closeSheet('#detail-sheet'); openEdit(id); };
+
+  // ---------- Edit ----------
+  let editingId = null, editPhoto = null;
+  const form = $('#edit-form');
+  const sel = $('#species-select');
+  sel.innerHTML = SPECIES.map(s => `<option value="${s.id}">${s.emoji} ${esc(s.name)}</option>`).join('');
+  sel.addEventListener('change', () => {
+    const s = speciesById(sel.value);
+    if (!editingId || confirm('Intervalle der Vorlage übernehmen?')) {
+      form.waterEvery.value = s.water;
+      form.fertEvery.value = s.fert;
+      if (s.light) form.light.value = s.light;
+    }
+    if (!form.name.value.trim() && s.id) form.name.value = s.name.split(' (')[0];
+    $('#species-hint').textContent = s.tip || 'Wähle eine Art, um Gieß- und Düngeintervalle vorzuschlagen.';
+    if (!editPhoto) $('#photo-preview').textContent = s.emoji;
+  });
+
+  function openEdit(id) {
+    editingId = id || null;
+    const p = id ? state.plants.find(x => x.id === id) : null;
+    $('#edit-title').textContent = p ? 'Pflanze bearbeiten' : 'Neue Pflanze';
+    form.reset();
+    sel.value = p ? p.species : '';
+    form.name.value = p ? p.name : '';
+    form.location.value = p ? (p.location || '') : '';
+    form.waterEvery.value = p ? p.waterEvery : 7;
+    form.fertEvery.value = p ? p.fertEvery : 14;
+    form.light.value = p ? (p.light || '') : '';
+    form.notes.value = p ? (p.notes || '') : '';
+    form.lastWater.value = p ? (lastOf(p, 'water') || '') : toISODate(new Date());
+    form.lastWater.max = toISODate(new Date());
+    editPhoto = p ? p.photo || null : null;
+    updatePhotoPreview();
+    $('#species-hint').textContent = speciesById(sel.value).tip || 'Wähle eine Art, um Gieß- und Düngeintervalle vorzuschlagen.';
+    $('#locations').innerHTML = [...new Set(state.plants.map(x => x.location).filter(Boolean))].map(l => `<option value="${esc(l)}">`).join('');
+    openSheet('#edit-sheet');
+  }
+  function updatePhotoPreview() {
+    const pv = $('#photo-preview');
+    if (editPhoto) { pv.style.backgroundImage = `url('${editPhoto}')`; pv.textContent = ''; }
+    else { pv.style.backgroundImage = ''; pv.textContent = speciesById(sel.value).emoji; }
+    $('#photo-remove').hidden = !editPhoto;
+  }
+  $('#photo-remove').onclick = () => { editPhoto = null; updatePhotoPreview(); };
+  $('#photo-input').addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try { editPhoto = await resizeImage(file, 720); updatePhotoPreview(); }
+    catch (err) { toast('Foto konnte nicht geladen werden.'); }
+    e.target.value = '';
+  });
+  function resizeImage(file, max) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const scale = Math.min(1, max / Math.max(img.width, img.height));
+        const c = document.createElement('canvas');
+        c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        resolve(c.toDataURL('image/jpeg', 0.78));
+      };
+      img.onerror = reject;
+      img.src = url;
+    });
+  }
+
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    const data = {
+      species: sel.value,
+      name: form.name.value.trim(),
+      location: form.location.value.trim(),
+      waterEvery: Math.max(1, parseInt(form.waterEvery.value, 10) || 7),
+      fertEvery: Math.max(0, parseInt(form.fertEvery.value, 10) || 0),
+      light: form.light.value,
+      notes: form.notes.value.trim(),
+      photo: editPhoto,
+    };
+    if (!data.name) return;
+    const lw = form.lastWater.value;
+    let p;
+    if (editingId) {
+      p = state.plants.find(x => x.id === editingId);
+      Object.assign(p, data);
+      if (lw && lw !== lastOf(p, 'water')) p.log.push({ id: uid(), type: 'water', date: lw, text: '' });
+    } else {
+      p = { id: uid(), created: toISODate(new Date()), log: [], ...data };
+      if (lw) p.log.push({ id: uid(), type: 'water', date: lw, text: '' });
+      state.plants.push(p);
+    }
+    store.save();
+    closeSheet('#edit-sheet');
+    render();
+    toast(editingId ? 'Gespeichert' : `${p.name} hinzugefügt 🌱`);
+  });
+
+  // ---------- Sheets ----------
+  function openSheet(sel) {
+    const el = $(sel);
+    el.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    history.pushState({ sheet: sel }, '');
+  }
+  function closeSheet(sel, fromPop) {
+    const el = $(sel);
+    if (!el.classList.contains('open')) return;
+    el.classList.remove('open');
+    if (sel === '#detail-sheet') openDetailId = null;
+    if (!document.querySelector('.sheet-backdrop.open')) document.body.style.overflow = '';
+    if (!fromPop && history.state && history.state.sheet) history.back();
+  }
+  // Android back button closes sheets
+  window.addEventListener('popstate', () => {
+    const open = [...document.querySelectorAll('.sheet-backdrop.open')].pop();
+    if (open) closeSheet('#' + open.id, true);
+  });
+  document.querySelectorAll('.sheet-backdrop').forEach(b => {
+    b.addEventListener('click', e => {
+      if (e.target === b || e.target.closest('[data-close]')) closeSheet('#' + b.id);
+    });
+  });
+
+  // ---------- Global clicks ----------
+  document.addEventListener('click', e => {
+    const doBtn = e.target.closest('[data-do]');
+    if (doBtn) { e.stopPropagation(); addEvent(doBtn.dataset.id, doBtn.dataset.do); return; }
+    const op = e.target.closest('[data-open]');
+    if (op) { openDetail(op.dataset.open); return; }
+    const f = e.target.closest('[data-filter]');
+    if (f) { plantFilter = f.dataset.filter; renderPlants(); return; }
+  });
+  document.querySelectorAll('nav.tabs button').forEach(b => b.addEventListener('click', () => {
+    currentView = b.dataset.view;
+    document.querySelectorAll('nav.tabs button').forEach(x => x.toggleAttribute('aria-current', x === b));
+    document.querySelectorAll('nav.tabs button[aria-current]').forEach(x => x.setAttribute('aria-current', 'page'));
+    ['today', 'plants', 'settings'].forEach(v => $('#view-' + v).hidden = v !== currentView);
+    window.scrollTo(0, 0);
+    render();
+  }));
+  $('#fab').onclick = () => openEdit();
+
+  // ---------- Backup ----------
+  function exportData() {
+    const blob = new Blob([JSON.stringify({ app: 'pflanzenpflege', version: 1, exported: new Date().toISOString(), ...state }, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `pflanzen-backup-${toISODate(new Date())}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  function importData(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const r = new FileReader();
+    r.onload = () => {
+      try {
+        const d = JSON.parse(r.result);
+        if (!Array.isArray(d.plants)) throw new Error('format');
+        if (!confirm(`${d.plants.length} Pflanzen importieren? Aktuelle Daten werden ersetzt.`)) return;
+        state = { plants: d.plants, settings: Object.assign({ winterMode: true, winterAuto: true }, d.settings || {}) };
+        store.save(); render(); toast('Backup importiert');
+      } catch { toast('Ungültige Backup-Datei'); }
+    };
+    r.readAsText(file);
+    e.target.value = '';
+  }
+
+  // ---------- PWA ----------
+  let deferredInstall = null;
+  window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredInstall = e; renderSettings(); });
+  async function doInstall() {
+    if (!deferredInstall) return;
+    deferredInstall.prompt();
+    await deferredInstall.userChoice;
+    deferredInstall = null; renderSettings();
+  }
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW', err));
+  }
+  // Refresh "today" when app comes back to foreground on a new day
+  let lastDay = toISODate(new Date());
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && toISODate(new Date()) !== lastDay) { lastDay = toISODate(new Date()); render(); }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
