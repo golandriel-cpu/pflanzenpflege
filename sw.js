@@ -1,6 +1,6 @@
 // Offline cache for the Pflanzenpflege PWA.
 // Bump VERSION whenever index.html or other assets change.
-const VERSION = 'pflanzen-v1';
+const VERSION = 'pflanzen-v2';
 const ASSETS = [
   './',
   './index.html',

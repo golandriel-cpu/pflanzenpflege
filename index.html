@@ -233,6 +233,23 @@
   .toast.show { display: flex; }
   .toast button { border: 0; background: none; color: var(--primary); font-weight: 700; padding: 4px; }
   @media (prefers-color-scheme: dark) { .toast button { color: #1f6f4a; } }
+  /* AI */
+  .ai-card { padding: 14px; margin-bottom: 14px; font-size: 15px; }
+  .ai-card h3 { margin: 0 0 4px; font-size: 17px; }
+  .ai-card .sci { color: var(--muted); font-style: italic; font-size: 14px; }
+  .ai-card ul { margin: 8px 0 0; padding-left: 20px; }
+  .ai-card .row-meta { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+  .pill { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--surface-2); }
+  .pill.ok { color: var(--ok); }
+  .pill.warn { background: var(--fert-bg); color: var(--fert); }
+  .pill.bad { background: var(--danger-bg); color: var(--danger); }
+  .btn.ai { background: linear-gradient(135deg, #2e8b57, #1f6f4a); color: #fff; }
+  .btn[disabled] { opacity: .6; cursor: progress; }
+  .spin { display: inline-block; width: 16px; height: 16px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -3px; margin-right: 6px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .key-row { display: flex; gap: 8px; padding: 0 14px 14px; }
+  .key-row input { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--bg); color: var(--text); border-radius: 12px; padding: 10px 12px; font: inherit; }
+  .settings select { width: auto; max-width: 52%; padding: 10px; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -277,6 +294,8 @@
           <button type="button" class="btn" id="photo-remove" hidden style="margin-left:6px">Entfernen</button>
         </div>
       </div>
+      <button type="button" class="btn ai block" id="ai-identify" hidden style="margin-bottom:14px">✨ Pflanze per Foto bestimmen</button>
+      <div id="ai-result"></div>
       <label class="field"><span>Art (Vorlage)</span>
         <select name="species" id="species-select"></select>
         <div class="hint" id="species-hint">Wähle eine Art, um Gieß- und Düngeintervalle vorzuschlagen.</div>
@@ -375,15 +394,16 @@
         const raw = localStorage.getItem(KEY);
         if (raw) return JSON.parse(raw);
       } catch (e) { console.warn('load failed', e); }
-      return { plants: [], settings: { winterMode: true, winterAuto: true } };
+      return { plants: [], settings: {} };
     },
     save() {
       try { localStorage.setItem(KEY, JSON.stringify(state)); }
       catch (e) { toast('Speichern fehlgeschlagen – evtl. Speicher voll (Fotos?).'); console.error(e); }
     }
   };
+  const DEFAULT_SETTINGS = { winterMode: true, winterAuto: true, aiModel: 'claude-opus-5-5' };
   let state = store.load();
-  state.settings = Object.assign({ winterMode: true, winterAuto: true }, state.settings || {});
+  state.settings = Object.assign({}, DEFAULT_SETTINGS, state.settings || {});
 
   // Ask the browser to keep our data (avoid eviction)
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
@@ -587,9 +607,21 @@
         <div class="item" ${s.winterMode ? '' : 'hidden'}><div>Automatisch nach Jahreszeit<small>Aus = Winterpflege immer aktiv</small></div>
           <label class="switch"><input type="checkbox" id="set-winter-auto" ${s.winterAuto ? 'checked' : ''}><span></span></label></div>
       </div>
+      <div class="section-title">Fotoanalyse (KI)</div>
+      <div class="card settings">
+        <div class="item" style="border-bottom:0"><div>Claude API-Schlüssel
+          <small>${getApiKey() ? '✓ gespeichert (…' + esc(getApiKey().slice(-4)) + ') – nur auf diesem Gerät' : 'Erstellen auf console.anthropic.com → API Keys. Bleibt nur auf diesem Gerät.'}</small></div></div>
+        <div class="key-row">
+          <input type="password" id="api-key" placeholder="${getApiKey() ? 'Neuen Schlüssel eingeben …' : 'sk-ant-…'}" autocomplete="off" spellcheck="false">
+          <button class="btn primary" id="api-key-save">Speichern</button>
+          ${getApiKey() ? '<button class="btn danger" id="api-key-del" aria-label="Schlüssel löschen">🗑</button>' : ''}
+        </div>
+        <div class="item"><div>Modell<small>Opus = am genauesten, Haiku = am günstigsten. Kosten pro Foto ca.</small></div>
+          <select id="ai-model">${AI_MODELS.map(m => `<option value="${m.id}" ${m.id === s.aiModel ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}</select></div>
+      </div>
       <div class="section-title">Daten</div>
       <div class="card settings">
-        <div class="item"><div>Backup exportieren<small>${state.plants.length} Pflanzen · ${total} Einträge als JSON-Datei</small></div>
+        <div class="item"><div>Backup exportieren<small>${state.plants.length} ${state.plants.length === 1 ? 'Pflanze' : 'Pflanzen'} ·${total} Einträge als JSON-Datei</small></div>
           <button class="btn" id="export">Export</button></div>
         <div class="item"><div>Backup importieren<small>Ersetzt alle aktuellen Daten</small></div>
           <label class="btn">Import<input type="file" accept="application/json,.json" id="import" hidden></label></div>
@@ -602,6 +634,15 @@
       <p class="hint" style="text-align:center; margin-top:20px">Alle Daten bleiben nur auf diesem Gerät gespeichert.<br>Mach ab und zu ein Backup.</p>`;
     $('#set-winter').onchange = e => { s.winterMode = e.target.checked; store.save(); render(); };
     const wa = $('#set-winter-auto'); if (wa) wa.onchange = e => { s.winterAuto = e.target.checked; store.save(); render(); };
+    $('#api-key-save').onclick = () => {
+      const k = $('#api-key').value.trim();
+      if (!k) return;
+      if (!k.startsWith('sk-ant-')) { toast('Das sieht nicht wie ein Claude API-Schlüssel aus (sk-ant-…).'); return; }
+      setApiKey(k); renderSettings(); toast('API-Schlüssel gespeichert');
+    };
+    const kd = $('#api-key-del');
+    if (kd) kd.onclick = () => { if (confirm('API-Schlüssel von diesem Gerät löschen?')) { setApiKey(''); renderSettings(); } };
+    $('#ai-model').onchange = e => { s.aiModel = e.target.value; store.save(); };
     $('#export').onclick = exportData;
     $('#import').onchange = importData;
     if (deferredInstall) { $('#install-wrap').hidden = false; $('#install-btn').onclick = doInstall; }
@@ -621,8 +662,8 @@
     const w = nextDue(p, 'water'), f = nextDue(p, 'fert');
     $('#detail-title').textContent = p.name;
     const lastW = lastOf(p, 'water'), lastF = lastOf(p, 'fert'), lastR = lastOf(p, 'repot');
-    const icon = { water: '💧', fert: '🌾', repot: '🪴', mist: '💨', note: '📝' };
-    const label = { water: 'Gegossen', fert: 'Gedüngt', repot: 'Umgetopft', mist: 'Besprüht', note: 'Notiz' };
+    const icon = { water: '💧', fert: '🌾', repot: '🪴', mist: '💨', note: '📝', check: '🩺' };
+    const label = { water: 'Gegossen', fert: 'Gedüngt', repot: 'Umgetopft', mist: 'Besprüht', note: 'Notiz', check: 'Gesundheitscheck' };
     const log = [...p.log].sort((a, b) => b.date.localeCompare(a.date) || 0).slice(0, 50);
     $('#detail-body').innerHTML = `
       <div class="hero" ${thumbStyle(p)}>${thumbInner(p)}</div>
@@ -641,6 +682,11 @@
         <button class="btn" data-do="repot" data-id="${p.id}">🪴 Umgetopft</button>
         <button class="btn" id="add-note">📝 Notiz</button>
       </div>
+      <label class="btn ai block" id="health-btn" style="display:block; text-align:center; margin-bottom:14px">🩺 Gesundheitscheck per Foto
+        <input type="file" accept="image/*" id="health-input" hidden></label>
+      <div id="health-result">${analysisCard(p.analysis, { title: 'Letzte KI-Analyse' })}</div>
+      ${p.analysis && p.analysis.is_plant && (p.analysis.water_every_days !== p.waterEvery || p.analysis.fertilize_every_days !== p.fertEvery)
+        ? `<button class="btn block" id="apply-ai" style="margin:-4px 0 14px">KI-Werte übernehmen (💧 ${p.analysis.water_every_days} · 🌾 ${p.analysis.fertilize_every_days || '–'} Tage)</button>` : ''}
       ${sp.tip ? `<div class="card tip">💡 ${esc(sp.tip)}</div>` : ''}
       <dl class="card kv">
         <dt>Art</dt><dd>${esc(sp.name)}</dd>
@@ -661,6 +707,37 @@
       const t = prompt('Notiz (z. B. „neues Blatt“, „Schädlinge entdeckt“):');
       if (t && t.trim()) addEvent(p.id, 'note', t.trim());
     };
+    $('#health-input').onchange = async e => {
+      const file = e.target.files[0];
+      e.target.value = '';
+      if (!file) return;
+      const btn = $('#health-btn');
+      btn.style.pointerEvents = 'none';
+      btn.innerHTML = '<span class="spin"></span>Prüfe Pflanze …';
+      try {
+        const img = await resizeImage(file, 1092, 0.85);
+        const a = await analyzePhoto(img, p);
+        if (a.is_plant) {
+          p.analysis = a;
+          p.log.push({ id: uid(), type: 'check', date: a.date, text: a.health_status });
+          store.save();
+        }
+        renderDetail(p.id);
+        if (!a.is_plant) $('#health-result').innerHTML = analysisCard(a);
+        renderToday(); renderPlants();
+      } catch (err) {
+        toast(err.userFacing ? err.message : 'Analyse fehlgeschlagen.');
+        if (!err.userFacing) console.error(err);
+        renderDetail(p.id);
+      }
+    };
+    const ap = $('#apply-ai');
+    if (ap) ap.onclick = () => {
+      p.waterEvery = Math.max(1, p.analysis.water_every_days || p.waterEvery);
+      p.fertEvery = Math.max(0, p.analysis.fertilize_every_days || 0);
+      if (LIGHTS.includes(p.analysis.light)) p.light = p.analysis.light;
+      store.save(); render(); toast('Intervalle aktualisiert');
+    };
     $('#delete-plant').onclick = () => {
       if (!confirm(`„${p.name}“ wirklich löschen? Der Verlauf geht verloren.`)) return;
       const idx = state.plants.indexOf(p);
@@ -676,7 +753,7 @@
   $('#detail-edit').onclick = () => { const id = openDetailId; closeSheet('#detail-sheet'); openEdit(id); };
 
   // ---------- Edit ----------
-  let editingId = null, editPhoto = null;
+  let editingId = null, editPhoto = null, editAiImage = null, pendingAnalysis = null;
   const form = $('#edit-form');
   const sel = $('#species-select');
   sel.innerHTML = SPECIES.map(s => `<option value="${s.id}">${s.emoji} ${esc(s.name)}</option>`).join('');
@@ -707,6 +784,8 @@
     form.lastWater.value = p ? (lastOf(p, 'water') || '') : toISODate(new Date());
     form.lastWater.max = toISODate(new Date());
     editPhoto = p ? p.photo || null : null;
+    editAiImage = null; pendingAnalysis = null;
+    $('#ai-result').innerHTML = '';
     updatePhotoPreview();
     $('#species-hint').textContent = speciesById(sel.value).tip || 'Wähle eine Art, um Gieß- und Düngeintervalle vorzuschlagen.';
     $('#locations').innerHTML = [...new Set(state.plants.map(x => x.location).filter(Boolean))].map(l => `<option value="${esc(l)}">`).join('');
@@ -717,16 +796,46 @@
     if (editPhoto) { pv.style.backgroundImage = `url('${editPhoto}')`; pv.textContent = ''; }
     else { pv.style.backgroundImage = ''; pv.textContent = speciesById(sel.value).emoji; }
     $('#photo-remove').hidden = !editPhoto;
+    $('#ai-identify').hidden = !editPhoto;
   }
-  $('#photo-remove').onclick = () => { editPhoto = null; updatePhotoPreview(); };
+  $('#photo-remove').onclick = () => { editPhoto = null; editAiImage = null; updatePhotoPreview(); };
   $('#photo-input').addEventListener('change', async e => {
     const file = e.target.files[0];
     if (!file) return;
-    try { editPhoto = await resizeImage(file, 720); updatePhotoPreview(); }
+    try {
+      editPhoto = await resizeImage(file, 720);           // stored in the app
+      editAiImage = await resizeImage(file, 1092, 0.85);  // sharper copy for analysis only
+      updatePhotoPreview();
+    }
     catch (err) { toast('Foto konnte nicht geladen werden.'); }
     e.target.value = '';
   });
-  function resizeImage(file, max) {
+
+  async function withBusy(btn, label, fn) {
+    const old = btn.innerHTML;
+    btn.disabled = true; btn.innerHTML = `<span class="spin"></span>${label}`;
+    try { return await fn(); }
+    catch (e) { toast(e.userFacing ? e.message : 'Analyse fehlgeschlagen.'); if (!e.userFacing) console.error(e); }
+    finally { btn.disabled = false; btn.innerHTML = old; }
+  }
+
+  $('#ai-identify').onclick = () => withBusy($('#ai-identify'), 'Analysiere Foto …', async () => {
+    const a = await analyzePhoto(editAiImage || editPhoto, null);
+    pendingAnalysis = a;
+    $('#ai-result').innerHTML = analysisCard(a);
+    if (!a.is_plant) return;
+    // Fill the form with the suggestions
+    sel.value = a.preset_id || '';
+    if (!form.name.value.trim()) form.name.value = a.common_name;
+    form.waterEvery.value = Math.min(120, Math.max(1, a.water_every_days || 7));
+    form.fertEvery.value = Math.min(365, Math.max(0, a.fertilize_every_days || 0));
+    if (LIGHTS.includes(a.light)) form.light.value = a.light;
+    const line = `${a.scientific_name} (Gattung ${a.genus}, ${a.family})`;
+    if (!form.notes.value.includes(a.scientific_name)) form.notes.value = (form.notes.value ? form.notes.value + '\n' : '') + line;
+    $('#species-hint').textContent = 'Werte aus der Fotoanalyse übernommen – du kannst sie anpassen.';
+    toast(`Erkannt: ${a.common_name}`);
+  });
+  function resizeImage(file, max, quality = 0.78) {
     return new Promise((resolve, reject) => {
       const img = new Image();
       const url = URL.createObjectURL(file);
@@ -736,7 +845,7 @@
         c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
         c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
         URL.revokeObjectURL(url);
-        resolve(c.toDataURL('image/jpeg', 0.78));
+        resolve(c.toDataURL('image/jpeg', quality));
       };
       img.onerror = reject;
       img.src = url;
@@ -756,6 +865,7 @@
       photo: editPhoto,
     };
     if (!data.name) return;
+    if (pendingAnalysis && pendingAnalysis.is_plant) data.analysis = pendingAnalysis;
     const lw = form.lastWater.value;
     let p;
     if (editingId) {
@@ -818,6 +928,168 @@
   }));
   $('#fab').onclick = () => openEdit();
 
+  // ---------- AI photo analysis (Claude API) ----------
+  // The API key lives in its own localStorage entry so it never ends up in backup files.
+  const KEY_STORE = 'pflanzenpflege.apikey';
+  const getApiKey = () => { try { return localStorage.getItem(KEY_STORE) || ''; } catch { return ''; } };
+  const setApiKey = k => { try { k ? localStorage.setItem(KEY_STORE, k) : localStorage.removeItem(KEY_STORE); } catch {} };
+
+  const AI_MODELS = [
+    { id: 'claude-opus-5-5', label: 'Opus 5.5 · ~4 ct', fallback: true },
+    { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5 · ~2 ct', fallback: true },
+    { id: 'claude-haiku-5-5', label: 'Haiku 5.5 · ~0,1 ct', fallback: false },
+  ];
+  const LIGHTS = ['Schatten', 'Halbschatten', 'Hell, indirekt', 'Sonnig'];
+
+  const ANALYSIS_SCHEMA = {
+    type: 'object',
+    additionalProperties: false,
+    required: ['is_plant', 'common_name', 'scientific_name', 'genus', 'family', 'confidence', 'preset_id',
+      'water_every_days', 'fertilize_every_days', 'light', 'care_summary', 'pet_safety',
+      'health_status', 'health_findings', 'actions'],
+    properties: {
+      is_plant: { type: 'boolean', description: 'false, wenn auf dem Foto keine Pflanze erkennbar ist' },
+      common_name: { type: 'string', description: 'Deutscher Trivialname' },
+      scientific_name: { type: 'string', description: 'Wissenschaftlicher Name (Gattung + Art, ggf. Sorte)' },
+      genus: { type: 'string' },
+      family: { type: 'string' },
+      confidence: { type: 'string', enum: ['hoch', 'mittel', 'niedrig'] },
+      preset_id: { type: 'string', enum: SPECIES.map(s => s.id), description: 'Passende Vorlage aus der Liste, sonst leerer String' },
+      water_every_days: { type: 'integer', description: 'Empfohlenes Gießintervall in Tagen (Zimmerhaltung, Wachstumszeit)' },
+      fertilize_every_days: { type: 'integer', description: 'Düngeintervall in Tagen während der Wachstumszeit, 0 = nicht düngen' },
+      light: { type: 'string', enum: LIGHTS },
+      care_summary: { type: 'string', description: '2–4 Sätze zu Gießen, Licht, Erde, Luftfeuchte' },
+      pet_safety: { type: 'string', description: 'Giftig für Katzen/Hunde/Kinder? Ein kurzer Satz.' },
+      health_status: { type: 'string', enum: ['gesund', 'leichte Probleme', 'deutliche Probleme', 'nicht beurteilbar'] },
+      health_findings: { type: 'string', description: 'Was am Zustand der Pflanze sichtbar ist (Blätter, Farbe, Schädlinge, Erde)' },
+      actions: { type: 'array', items: { type: 'string' }, description: 'Konkrete nächste Schritte, maximal 5' },
+    },
+  };
+
+  let sdkPromise = null;
+  function loadSdk() {
+    // Loaded only when needed, so the rest of the app stays fully offline-capable.
+    if (!sdkPromise) sdkPromise = import('https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@1.3.0/+esm')
+      .then(m => m.default || m.Anthropic)
+      .catch(e => { sdkPromise = null; throw e; });
+    return sdkPromise;
+  }
+
+  function dataUrlToImageBlock(dataUrl) {
+    const [head, data] = dataUrl.split(',');
+    const media_type = head.slice(5, head.indexOf(';'));
+    return { type: 'image', source: { type: 'base64', media_type, data } };
+  }
+
+  async function analyzePhoto(imageDataUrl, plant) {
+    const apiKey = getApiKey();
+    if (!apiKey) {
+      const err = new Error('Kein API-Schlüssel hinterlegt. Trage ihn unter „Mehr“ → „Fotoanalyse“ ein.');
+      err.userFacing = true; throw err;
+    }
+    let Anthropic;
+    try { Anthropic = await loadSdk(); }
+    catch { const e = new Error('Keine Internetverbindung – die Fotoanalyse braucht Internet.'); e.userFacing = true; throw e; }
+    const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true, maxRetries: 2 });
+
+    const presetList = SPECIES.filter(s => s.id).map(s => `${s.id} = ${s.name}`).join('\n');
+    let task;
+    if (plant) {
+      const lastW = lastOf(plant, 'water');
+      const recent = [...plant.log].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8)
+        .map(e => `${e.date}: ${e.type}${e.text ? ' (' + e.text + ')' : ''}`).join('\n') || 'keine';
+      task = `Das ist meine Pflanze „${plant.name}“ (bisher eingetragen als: ${speciesById(plant.species).name}).
+Standort: ${plant.location || 'unbekannt'}, Licht: ${plant.light || 'unbekannt'}.
+Gießintervall aktuell: alle ${plant.waterEvery} Tage, zuletzt gegossen: ${lastW || 'unbekannt'}.
+Düngen: ${plant.fertEvery ? 'alle ' + plant.fertEvery + ' Tage' : 'nie'}. Heute ist der ${toISODate(new Date())}${isWinterNow() ? ' (Winterhalbjahr)' : ''}.
+Letzte Pflege-Einträge:
+${recent}
+
+Mach einen Gesundheitscheck: Beurteile den sichtbaren Zustand genau, nenne wahrscheinliche Ursachen von Problemen
+(auch mit Blick auf die Gießhistorie) und konkrete Maßnahmen. Bestätige oder korrigiere außerdem die Art.`;
+    } else {
+      task = `Bestimme diese Zimmerpflanze (Gattung und möglichst Art) und gib Pflegeempfehlungen für die Haltung in einer Wohnung in Mitteleuropa.
+Beurteile außerdem kurz den sichtbaren Gesundheitszustand.`;
+    }
+    const prompt = `${task}
+
+Wähle für preset_id die passende Vorlage aus dieser Liste, oder "" wenn keine passt:
+${presetList}
+
+Intervalle sollen für die Wachstumszeit (Frühling/Sommer) gelten; die App verlängert sie im Winter selbst.
+Wenn das Foto keine Pflanze zeigt oder zu unscharf ist, setze is_plant bzw. confidence entsprechend und erkläre es in health_findings.
+Alle Texte auf Deutsch, kurz und praxisnah.`;
+
+    const model = AI_MODELS.find(m => m.id === state.settings.aiModel) || AI_MODELS[0];
+    const params = {
+      model: model.id,
+      max_tokens: 16000,
+      system: 'Du bist ein erfahrener Gärtner und Experte für Zimmerpflanzen und Pflanzenkrankheiten. Du antwortest auf Deutsch.',
+      output_config: { effort: 'medium', format: { type: 'json_schema', schema: ANALYSIS_SCHEMA } },
+      messages: [{ role: 'user', content: [dataUrlToImageBlock(imageDataUrl), { type: 'text', text: prompt }] }],
+    };
+
+    let response;
+    try {
+      response = model.fallback
+        // Server-side fallback: if a safety classifier declines, the API retries on a fallback model.
+        ? await client.beta.messages.create({ ...params, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' })
+        : await client.messages.create(params);
+    } catch (e) {
+      const err = new Error(
+        e instanceof Anthropic.AuthenticationError ? 'Der API-Schlüssel ist ungültig. Bitte unter „Mehr“ prüfen.'
+        : e instanceof Anthropic.PermissionDeniedError ? 'Der API-Schlüssel hat keine Berechtigung für dieses Modell.'
+        : e instanceof Anthropic.RateLimitError ? 'Zu viele Anfragen oder Guthaben aufgebraucht – bitte später erneut versuchen bzw. Guthaben prüfen.'
+        : e instanceof Anthropic.APIConnectionError ? 'Keine Verbindung zum Analyse-Dienst. Bist du online?'
+        : e instanceof Anthropic.APIError && /credit|balance|billing/i.test(e.message) ? 'Kein Guthaben mehr auf deinem Anthropic-Konto.'
+        : e instanceof Anthropic.APIError ? `Fehler vom Analyse-Dienst (${e.status || '?'}). Bitte erneut versuchen.`
+        : 'Unbekannter Fehler bei der Analyse.');
+      err.userFacing = true; console.error(e); throw err;
+    }
+    if (response.stop_reason === 'refusal') {
+      const e = new Error('Die Analyse wurde abgelehnt. Bitte ein anderes Foto versuchen.'); e.userFacing = true; throw e;
+    }
+    if (response.stop_reason === 'max_tokens') {
+      const e = new Error('Die Antwort war unvollständig. Bitte erneut versuchen.'); e.userFacing = true; throw e;
+    }
+    const text = response.content.filter(b => b.type === 'text').map(b => b.text).pop();
+    try {
+      const result = JSON.parse(text);
+      result.date = toISODate(new Date());
+      result.model = response.model || model.id;
+      return result;
+    } catch {
+      const e = new Error('Die Antwort konnte nicht gelesen werden. Bitte erneut versuchen.'); e.userFacing = true; throw e;
+    }
+  }
+
+  function healthPill(status) {
+    const cls = status === 'gesund' ? 'ok' : status === 'leichte Probleme' ? 'warn' : status === 'deutliche Probleme' ? 'bad' : '';
+    const ic = status === 'gesund' ? '💚' : status === 'leichte Probleme' ? '⚠️' : status === 'deutliche Probleme' ? '🚨' : '❔';
+    return `<span class="pill ${cls}">${ic} ${esc(status)}</span>`;
+  }
+  function analysisCard(a, { title } = {}) {
+    if (!a) return '';
+    if (!a.is_plant) return `<div class="card ai-card"><h3>Keine Pflanze erkannt</h3><p>${esc(a.health_findings)}</p></div>`;
+    return `<div class="card ai-card">
+      ${title ? `<div class="hint" style="margin-bottom:4px">${esc(title)}</div>` : ''}
+      <h3>${esc(a.common_name)}</h3>
+      <div class="sci">${esc(a.scientific_name)} · Gattung ${esc(a.genus)} · ${esc(a.family)}</div>
+      <div class="row-meta">
+        <span class="pill">Sicherheit: ${esc(a.confidence)}</span>
+        ${healthPill(a.health_status)}
+        <span class="pill">💧 alle ${a.water_every_days} T</span>
+        <span class="pill">🌾 ${a.fertilize_every_days ? 'alle ' + a.fertilize_every_days + ' T' : 'nicht düngen'}</span>
+        <span class="pill">☀️ ${esc(a.light)}</span>
+      </div>
+      <p style="margin:6px 0">${esc(a.care_summary)}</p>
+      ${a.health_findings ? `<p style="margin:6px 0"><strong>Zustand:</strong> ${esc(a.health_findings)}</p>` : ''}
+      ${a.actions && a.actions.length ? `<strong>Empfehlungen:</strong><ul>${a.actions.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+      ${a.pet_safety ? `<p class="hint" style="margin-top:8px">🐾 ${esc(a.pet_safety)}</p>` : ''}
+      <p class="hint" style="margin-top:6px">KI-Einschätzung vom ${fmtDate(a.date)} – kann sich irren.</p>
+    </div>`;
+  }
+
   // ---------- Backup ----------
   function exportData() {
     const blob = new Blob([JSON.stringify({ app: 'pflanzenpflege', version: 1, exported: new Date().toISOString(), ...state }, null, 2)], { type: 'application/json' });
@@ -836,7 +1108,7 @@
         const d = JSON.parse(r.result);
         if (!Array.isArray(d.plants)) throw new Error('format');
         if (!confirm(`${d.plants.length} Pflanzen importieren? Aktuelle Daten werden ersetzt.`)) return;
-        state = { plants: d.plants, settings: Object.assign({ winterMode: true, winterAuto: true }, d.settings || {}) };
+        state = { plants: d.plants, settings: Object.assign({}, DEFAULT_SETTINGS, d.settings || {}) };
         store.save(); render(); toast('Backup importiert');
       } catch { toast('Ungültige Backup-Datei'); }
     };
